@@ -16,8 +16,10 @@ from collections.abc import Iterator
 
 from fastapi import Depends, HTTPException, Request
 from fastapi.routing import APIRoute
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
-from app.models import User
+from app.models import Enrollment, User
 from app.permissions import Permission, has_permission
 from app.security import get_current_user
 
@@ -67,6 +69,38 @@ def require_permission(*required: Permission):
     dependency.rbac_permissions = frozenset(required)  # type: ignore[attr-defined]
     dependency.__name__ = "require_" + "_".join(p.name.lower() for p in required)
     return dependency
+
+
+# --- Object-level (ownership) checks ---------------------------------------
+#
+# A role check answers "may this kind of user read grades?"; these answer
+# "may this particular user read *this* record?". Both must pass.
+
+
+def ensure_self(current_user: User, target_user_id: int) -> None:
+    """Reject any attempt to act on another user's records (horizontal escalation).
+
+    The caller's id comes from the verified session, never from the request
+    body, so a manipulated client cannot claim to be someone else.
+    """
+    if current_user.id != target_user_id:
+        raise access_denied()
+
+
+def get_own_enrollment(db: Session, student: User, course_id: int) -> Enrollment:
+    """Return the caller's enrollment in ``course_id`` or deny access.
+
+    An unenrolled student and a non-existent course are indistinguishable in the
+    response, so the endpoint cannot be used to discover which courses exist.
+    """
+    enrollment = db.scalar(
+        select(Enrollment).where(
+            Enrollment.student_id == student.id, Enrollment.course_id == course_id
+        )
+    )
+    if enrollment is None:
+        raise access_denied()
+    return enrollment
 
 
 # --- Startup audit of the route table --------------------------------------

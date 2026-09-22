@@ -19,7 +19,8 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./portal.db"
 
     # Session / JWT
-    secret_key: str = "dev-only-insecure-secret-change-me"
+    # Development default only; set SECRET_KEY in the environment for any real use.
+    secret_key: str = "dev-only-insecure-secret-change-me-0123456789"
     jwt_algorithm: str = "HS256"
     access_token_ttl_minutes: int = 30
 

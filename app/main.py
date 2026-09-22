@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from app import __version__
 from app.config import settings
 from app.database import init_db
+from app.routers import auth
 
 
 @asynccontextmanager
@@ -27,6 +28,8 @@ def create_app() -> FastAPI:
     @app.get("/health", tags=["meta"])
     def health() -> dict[str, str]:
         return {"status": "ok", "version": __version__}
+
+    app.include_router(auth.router)
 
     return app
 

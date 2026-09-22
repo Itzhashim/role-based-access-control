@@ -138,6 +138,23 @@ class Grade(Base):
         return "F"
 
 
+class RevokedToken(Base):
+    """Blocklist of session tokens invalidated by an explicit logout.
+
+    Rows may be purged once ``expires_at`` has passed: after that the token is
+    rejected by its own expiry claim anyway.
+    """
+
+    __tablename__ = "revoked_tokens"
+
+    jti: Mapped[str] = mapped_column(String(32), primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    revoked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
 class Announcement(Base):
     __tablename__ = "announcements"
 

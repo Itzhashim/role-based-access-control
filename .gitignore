@@ -16,6 +16,9 @@ __pycache__/
 # Environment configuration
 .env
 
+# Local assistant/editor instruction file, not part of the deliverable
+CLAUDE.md
+
 # Editors / OS
 .vscode/
 .idea/

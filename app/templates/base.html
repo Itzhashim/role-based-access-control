@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}College Portal{% endblock %}</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/dashboard">College Portal</a>
+    {% if user %}
+      <nav>
+        <a href="/dashboard">Dashboard</a>
+        {% if user.role.value == 'student' %}
+          <a href="/portal/grades">My grades</a>
+        {% elif user.role.value == 'admin' %}
+          <a href="/portal/admin/users">Users</a>
+          <a href="/portal/admin/audit">Audit log</a>
+        {% endif %}
+      </nav>
+      <span class="identity">
+        {{ user.full_name }}
+        <span class="badge badge-{{ user.role.value }}">{{ user.role.value }}</span>
+        <a class="logout" href="/logout">Sign out</a>
+      </span>
+    {% endif %}
+  </header>
+
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer>
+    <small>
+      Server-side RBAC demo &middot; every page and form is checked again on the server.
+    </small>
+  </footer>
+</body>
+</html>

@@ -12,14 +12,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.audit import AuditAction, record_audit
-from app.authz import (
-    ensure_self,
-    get_assigned_course,
-    get_enrollment_in_course,
-    require_permission,
-)
+from app.authz import ensure_self, get_assigned_course, require_permission
 from app.database import get_db
-from app.models import Announcement, Course, Grade, User
+from app.models import Announcement, Course, User
 from app.permissions import Permission
 from app.schemas import (
     AnnouncementCreate,
@@ -30,6 +25,7 @@ from app.schemas import (
     RosterEntry,
 )
 from app.serializers import announcement_out, course_out, grade_out
+from app.services import upsert_grade as upsert_grade_service
 
 router = APIRouter(prefix="/api/faculty", tags=["faculty"])
 
@@ -87,32 +83,13 @@ def upsert_grade(
     db: Session = Depends(get_db),
 ) -> GradeOut:
     """Record or update a grade for a student on the caller's own course."""
-    course = get_assigned_course(db, current_user, course_id)
-    enrollment = get_enrollment_in_course(db, course_id, payload.student_id)
-
-    grade = enrollment.grade
-    previous = grade.score if grade else None
-    if grade is None:
-        grade = Grade(enrollment_id=enrollment.id, score=payload.score, letter="F")
-        db.add(grade)
-
-    grade.score = payload.score
-    grade.letter = Grade.letter_for(payload.score)
-    grade.comment = payload.comment
-    grade.updated_by_id = current_user.id
-    db.commit()
-    db.refresh(grade)
-
-    record_audit(
+    grade, enrollment = upsert_grade_service(
         db,
-        action=AuditAction.GRADE_WRITE,
-        actor=current_user,
-        target_type="grade",
-        target_id=grade.id,
-        detail=(
-            f"{course.code} student={payload.student_id} "
-            f"{'created' if previous is None else f'{previous} ->'} {grade.score}"
-        ),
+        faculty=current_user,
+        course_id=course_id,
+        student_id=payload.student_id,
+        score=payload.score,
+        comment=payload.comment,
         request=request,
     )
     return grade_out(grade, enrollment)

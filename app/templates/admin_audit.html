@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Audit log{% endblock %}
+{% block content %}
+<h1>Audit log</h1>
+<p class="subtle">Sensitive operations and every refused request, newest first.</p>
+
+<nav class="filters">
+  <a class="button {{ 'active' if not outcome }}" href="/portal/admin/audit">All</a>
+  <a class="button {{ 'active' if outcome == 'denied' }}" href="/portal/admin/audit?outcome=denied">Denied only</a>
+  <a class="button {{ 'active' if outcome == 'allowed' }}" href="/portal/admin/audit?outcome=allowed">Allowed only</a>
+</nav>
+
+<section class="card">
+  <table>
+    <thead>
+      <tr>
+        <th>Time</th><th>Actor</th><th>Role</th><th>Action</th>
+        <th>Outcome</th><th>Target</th><th>Detail</th><th>Source</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for entry in entries %}
+      <tr class="{{ 'denied' if entry.outcome == 'denied' else '' }}">
+        <td class="subtle">{{ entry.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+        <td>{{ entry.actor_username or 'anonymous' }}</td>
+        <td>{{ entry.actor_role or '—' }}</td>
+        <td><code>{{ entry.action }}</code></td>
+        <td>{{ entry.outcome }}</td>
+        <td class="subtle">{{ entry.target_type or '' }} {{ entry.target_id or '' }}</td>
+        <td class="subtle">{{ entry.detail or '' }}</td>
+        <td class="subtle">{{ entry.ip_address or '' }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="8" class="subtle">No entries.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

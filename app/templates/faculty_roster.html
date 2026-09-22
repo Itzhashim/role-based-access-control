@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}{{ course.code }} roster{% endblock %}
+{% block content %}
+<h1>{{ course.code }} — {{ course.title }}</h1>
+<p class="subtle">{{ course.term }} · assigned to you</p>
+
+{% if saved %}<p class="notice">Grade saved and written to the audit log.</p>{% endif %}
+
+<section class="card">
+  <h2>Roster</h2>
+  <table>
+    <thead><tr><th>Student</th><th>Current</th><th>New score</th><th>Feedback</th><th></th></tr></thead>
+    <tbody>
+      {% for enrollment in course.enrollments %}
+      <tr>
+        <td>{{ enrollment.student.full_name }}</td>
+        <td>
+          {% if enrollment.grade %}
+            {{ enrollment.grade.score }} ({{ enrollment.grade.letter }})
+          {% else %}<span class="subtle">—</span>{% endif %}
+        </td>
+        <form method="post" action="/portal/courses/{{ course.id }}/grades">
+          <input type="hidden" name="student_id" value="{{ enrollment.student_id }}">
+          <td><input type="number" name="score" min="0" max="100" step="0.5"
+                     value="{{ enrollment.grade.score if enrollment.grade else '' }}" required></td>
+          <td><input type="text" name="comment" maxlength="500"
+                     value="{{ enrollment.grade.comment if enrollment.grade and enrollment.grade.comment else '' }}"></td>
+          <td><button type="submit">Save</button></td>
+        </form>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="subtle">Nobody is enrolled yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

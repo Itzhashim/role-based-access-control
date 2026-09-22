@@ -4,13 +4,14 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 
 from app import __version__
-from app.errors import install_exception_handlers
-from app.config import settings
 from app.authz import verify_deny_by_default
+from app.config import settings
 from app.database import init_db
-from app.routers import admin, auth, faculty, meta, students
+from app.errors import install_exception_handlers
+from app.routers import admin, auth, faculty, meta, portal, students
 
 
 @asynccontextmanager
@@ -39,6 +40,9 @@ def create_app() -> FastAPI:
     app.include_router(students.router)
     app.include_router(faculty.router)
     app.include_router(admin.router)
+    app.include_router(portal.router)
+
+    app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
     # Fail fast if any route was added without an authorization requirement.
     verify_deny_by_default(app)

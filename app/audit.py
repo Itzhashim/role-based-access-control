@@ -9,8 +9,7 @@ from __future__ import annotations
 
 import enum
 
-from fastapi import Request, Response
-from fastapi.exception_handlers import http_exception_handler
+from fastapi import Request
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -118,29 +117,29 @@ def actor_from_request(request: Request) -> tuple[int | None, str | None, str | 
     return actor_id, claims.get("username"), claims.get("role")
 
 
-async def audit_denied_request(request: Request, exc) -> Response:
-    """Exception handler that records every refused request.
+def audit_refusal(request: Request, status_code: int) -> None:
+    """Record a refused request.
 
-    Logging here rather than in each route means a new endpoint cannot forget
-    to audit its denials, and both 401s (no valid session) and 403s (session
-    fine, permission or ownership missing) are captured.
+    Called from the exception handler rather than from each route, so a new
+    endpoint cannot forget to audit its denials. Both 401s (no valid session)
+    and 403s (valid session, missing permission or ownership) are captured.
     """
-    if exc.status_code in (401, 403) and request.url.path not in SELF_AUDITING_PATHS:
-        actor_id, username, role = actor_from_request(request)
-        required = getattr(request.state, "denied_permission", None)
-        record_audit_isolated(
-            action=AuditAction.ACCESS_DENIED if exc.status_code == 403 else AuditAction.AUTH_REQUIRED,
-            outcome=DENIED,
-            actor_id=actor_id,
-            actor_username=username,
-            actor_role=role,
-            target_type="endpoint",
-            target_id=request.url.path,
-            detail=f"status={exc.status_code}"
-            + (f" required={required}" if required else ""),
-            request=request,
-        )
-    return await http_exception_handler(request, exc)
+    if status_code not in (401, 403) or request.url.path in SELF_AUDITING_PATHS:
+        return
+
+    actor_id, username, role = actor_from_request(request)
+    required = getattr(request.state, "denied_permission", None)
+    record_audit_isolated(
+        action=AuditAction.ACCESS_DENIED if status_code == 403 else AuditAction.AUTH_REQUIRED,
+        outcome=DENIED,
+        actor_id=actor_id,
+        actor_username=username,
+        actor_role=role,
+        target_type="endpoint",
+        target_id=request.url.path,
+        detail=f"status={status_code}" + (f" required={required}" if required else ""),
+        request=request,
+    )
 
 
 def recent_entries(db: Session, limit: int = 100, **filters) -> list[AuditLog]:

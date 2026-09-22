@@ -31,6 +31,7 @@ ACCESS_DENIED_MESSAGE = "Access denied"
 #: here must declare a permission or the application refuses to start.
 PUBLIC_PATHS: frozenset[str] = frozenset(
     {
+        "/",  # redirects to the dashboard, shows nothing itself
         "/health",
         "/login",
         "/api/auth/login",
@@ -42,8 +43,11 @@ PUBLIC_PATHS: frozenset[str] = frozenset(
 )
 
 #: Routes that need a logged-in user but no further permission (they act purely
-#: on the caller's own session).
-SESSION_ONLY_PATHS: frozenset[str] = frozenset({"/api/auth/logout", "/api/auth/me", "/logout"})
+#: on the caller's own session). The dashboard is here because it renders a
+#: different view per role rather than exposing one privileged resource.
+SESSION_ONLY_PATHS: frozenset[str] = frozenset(
+    {"/api/auth/logout", "/api/auth/me", "/logout", "/dashboard"}
+)
 
 
 def access_denied() -> HTTPException:

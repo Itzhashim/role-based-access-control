@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Student dashboard{% endblock %}
+{% block content %}
+<h1>Welcome, {{ user.full_name }}</h1>
+<p class="subtle">You are signed in as a student. You can see your own records only.</p>
+
+<section class="card">
+  <h2>My courses</h2>
+  <table>
+    <thead><tr><th>Code</th><th>Title</th><th>Instructor</th><th>Grade</th></tr></thead>
+    <tbody>
+      {% for enrollment in enrollments %}
+      <tr>
+        <td>{{ enrollment.course.code }}</td>
+        <td>{{ enrollment.course.title }}</td>
+        <td>{{ enrollment.course.faculty.full_name if enrollment.course.faculty else '—' }}</td>
+        <td>
+          {% if enrollment.grade %}
+            {{ enrollment.grade.score }} ({{ enrollment.grade.letter }})
+          {% else %}
+            <span class="subtle">not graded yet</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4" class="subtle">No enrollments.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section class="card">
+  <h2>Announcements</h2>
+  {% for announcement in announcements %}
+    <article class="announcement">
+      <h3>{{ announcement.title }}
+        <span class="tag">{{ announcement.course.code if announcement.course else 'campus' }}</span>
+      </h3>
+      <p>{{ announcement.body }}</p>
+    </article>
+  {% else %}
+    <p class="subtle">Nothing published yet.</p>
+  {% endfor %}
+</section>
+
+<section class="card">
+  <h2>Your permissions</h2>
+  <p class="subtle">Granted by the <code>student</code> role. Anything not listed is refused by the server.</p>
+  <ul class="permissions">
+    {% for permission in permissions %}<li><code>{{ permission }}</code></li>{% endfor %}
+  </ul>
+</section>
+{% endblock %}

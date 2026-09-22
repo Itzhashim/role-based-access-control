@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Administrator dashboard{% endblock %}
+{% block content %}
+<h1>Welcome, {{ user.full_name }}</h1>
+<p class="subtle">
+  You are signed in as an administrator: accounts, roles and courses — but no access to
+  grade records.
+</p>
+
+<section class="card grid">
+  <div><span class="stat">{{ users | length }}</span><span class="stat-label">accounts</span></div>
+  <div><span class="stat">{{ courses | length }}</span><span class="stat-label">courses</span></div>
+  <div>
+    <span class="stat">{{ recent | selectattr('outcome', 'equalto', 'denied') | list | length }}</span>
+    <span class="stat-label">recent denials</span>
+  </div>
+</section>
+
+<section class="card">
+  <h2>Courses</h2>
+  <table>
+    <thead><tr><th>Code</th><th>Title</th><th>Instructor</th><th>Enrolled</th></tr></thead>
+    <tbody>
+      {% for course in courses %}
+      <tr>
+        <td>{{ course.code }}</td>
+        <td>{{ course.title }}</td>
+        <td>{{ course.faculty.full_name if course.faculty else 'unassigned' }}</td>
+        <td>{{ course.enrollments | length }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section class="card">
+  <h2>Latest audit entries</h2>
+  <table>
+    <thead><tr><th>Time</th><th>Actor</th><th>Action</th><th>Outcome</th><th>Detail</th></tr></thead>
+    <tbody>
+      {% for entry in recent %}
+      <tr class="{{ 'denied' if entry.outcome == 'denied' else '' }}">
+        <td class="subtle">{{ entry.timestamp.strftime('%H:%M:%S') }}</td>
+        <td>{{ entry.actor_username or 'anonymous' }}</td>
+        <td><code>{{ entry.action }}</code></td>
+        <td>{{ entry.outcome }}</td>
+        <td class="subtle">{{ entry.detail or entry.target_id or '' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p><a class="button" href="/portal/admin/audit">Open full audit log</a></p>
+</section>
+{% endblock %}

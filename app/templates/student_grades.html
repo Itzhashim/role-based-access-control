@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}My grades{% endblock %}
+{% block content %}
+<h1>My grades</h1>
+<p class="subtle">Scoped to your own enrollments by the server, not by this page.</p>
+
+<section class="card">
+  <table>
+    <thead><tr><th>Course</th><th>Score</th><th>Letter</th><th>Feedback</th><th>Updated</th></tr></thead>
+    <tbody>
+      {% for enrollment in enrollments %}
+      <tr>
+        <td>{{ enrollment.course.code }} — {{ enrollment.course.title }}</td>
+        <td>{{ enrollment.grade.score if enrollment.grade else '—' }}</td>
+        <td>{{ enrollment.grade.letter if enrollment.grade else '—' }}</td>
+        <td>{{ enrollment.grade.comment if enrollment.grade and enrollment.grade.comment else '' }}</td>
+        <td class="subtle">
+          {{ enrollment.grade.updated_at.strftime('%Y-%m-%d %H:%M') if enrollment.grade else '' }}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="subtle">No grades recorded.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

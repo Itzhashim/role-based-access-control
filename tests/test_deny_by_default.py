@@ -52,6 +52,7 @@ def test_public_allowlist_is_small_and_explicit():
     # Anything beyond authentication, health and the API docs would be a finding.
     assert PUBLIC_PATHS == frozenset(
         {
+            "/",
             "/health",
             "/login",
             "/api/auth/login",

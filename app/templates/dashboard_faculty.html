@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Faculty dashboard{% endblock %}
+{% block content %}
+<h1>Welcome, {{ user.full_name }}</h1>
+<p class="subtle">
+  You are signed in as faculty. You can open only the courses assigned to you.
+</p>
+
+<section class="card">
+  <h2>My courses</h2>
+  <table>
+    <thead><tr><th>Code</th><th>Title</th><th>Term</th><th>Students</th><th></th></tr></thead>
+    <tbody>
+      {% for course in courses %}
+      <tr>
+        <td>{{ course.code }}</td>
+        <td>{{ course.title }}</td>
+        <td>{{ course.term }}</td>
+        <td>{{ course.enrollments | length }}</td>
+        <td><a class="button" href="/portal/courses/{{ course.id }}">Open roster</a></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="subtle">No courses assigned.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section class="card">
+  <h2>Your permissions</h2>
+  <ul class="permissions">
+    {% for permission in permissions %}<li><code>{{ permission }}</code></li>{% endfor %}
+  </ul>
+</section>
+{% endblock %}

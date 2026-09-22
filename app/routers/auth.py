@@ -3,24 +3,15 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.audit import DENIED, AuditAction, record_audit
+from app.audit import AuditAction, record_audit
 from app.config import settings
 from app.database import get_db
 from app.models import User
 from app.schemas import LoginRequest, MessageResponse, TokenResponse, UserOut
-from app.security import (
-    DUMMY_PASSWORD_HASH,
-    create_access_token,
-    get_current_user,
-    is_locked_out,
-    register_failed_login,
-    reset_failed_logins,
-    revoke_token,
-    verify_password,
-)
+from app.security import create_access_token, get_current_user, revoke_token
+from app.services import authenticate
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -52,48 +43,12 @@ def login(
     password and a deactivated account, so the endpoint cannot be used to
     enumerate valid accounts.
     """
-    user = db.scalar(select(User).where(User.username == payload.username))
-
+    user = authenticate(db, username=payload.username, password=payload.password, request=request)
     if user is None:
-        # Spend comparable time on unknown accounts to blunt timing analysis.
-        verify_password(payload.password, DUMMY_PASSWORD_HASH)
-        record_audit(
-            db,
-            action=AuditAction.LOGIN_FAILURE,
-            outcome=DENIED,
-            actor_username=payload.username,
-            detail="unknown account",
-            request=request,
-        )
         raise HTTPException(status_code=401, detail=INVALID_CREDENTIALS)
 
-    if is_locked_out(user):
-        record_audit(
-            db,
-            action=AuditAction.LOGIN_FAILURE,
-            outcome=DENIED,
-            actor=user,
-            detail="account temporarily locked",
-            request=request,
-        )
-        raise HTTPException(status_code=401, detail=INVALID_CREDENTIALS)
-
-    if not user.is_active or not verify_password(payload.password, user.password_hash):
-        locked = user.is_active and register_failed_login(db, user)
-        record_audit(
-            db,
-            action=AuditAction.ACCOUNT_LOCKED if locked else AuditAction.LOGIN_FAILURE,
-            outcome=DENIED,
-            actor=user,
-            detail="inactive account" if not user.is_active else "bad password",
-            request=request,
-        )
-        raise HTTPException(status_code=401, detail=INVALID_CREDENTIALS)
-
-    reset_failed_logins(db, user)
     token, expires_at = create_access_token(user)
     set_session_cookie(response, token)
-    record_audit(db, action=AuditAction.LOGIN_SUCCESS, actor=user, request=request)
     return TokenResponse(access_token=token, expires_at=expires_at, role=user.role)
 
 

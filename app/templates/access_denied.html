@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Access denied{% endblock %}
+{% block content %}
+<section class="card card-narrow">
+  <h1>Access denied</h1>
+  <p>
+    Your account does not have access to this page. The attempt has been recorded.
+  </p>
+  <p class="subtle">
+    No further detail is shown on purpose: the response is identical whether the page
+    needs another role, belongs to someone else, or does not exist at all.
+  </p>
+  <p><a class="button" href="/dashboard">Back to dashboard</a></p>
+</section>
+{% endblock %}

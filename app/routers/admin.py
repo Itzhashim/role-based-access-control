@@ -33,6 +33,7 @@ from app.schemas import (
 )
 from app.security import hash_password
 from app.serializers import announcement_out, course_out
+from app.services import assign_role as assign_role_service
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -141,23 +142,9 @@ def assign_role(
     accidentally remove the last administrator.
     """
     user = _get_user_or_404(db, user_id)
-    if user.id == current_user.id:
-        raise HTTPException(status_code=400, detail="Cannot change your own role")
-
-    previous_role = user.role
-    user.role = payload.role
-    db.commit()
-    db.refresh(user)
-    record_audit(
-        db,
-        action=AuditAction.ROLE_ASSIGN,
-        actor=current_user,
-        target_type="user",
-        target_id=user.id,
-        detail=f"{previous_role.value} -> {user.role.value}",
-        request=request,
+    return assign_role_service(
+        db, administrator=current_user, target_user=user, new_role=payload.role, request=request
     )
-    return user
 
 
 # --- Courses and enrollments -----------------------------------------------

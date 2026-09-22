@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Manage users{% endblock %}
+{% block content %}
+<h1>Accounts</h1>
+<p class="subtle">Role changes and deactivations take effect on the next request and are audited.</p>
+
+<section class="card">
+  <table>
+    <thead>
+      <tr><th>Username</th><th>Name</th><th>Role</th><th>Status</th><th>Change role</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for account in users %}
+      <tr>
+        <td><code>{{ account.username }}</code></td>
+        <td>{{ account.full_name }}</td>
+        <td><span class="badge badge-{{ account.role.value }}">{{ account.role.value }}</span></td>
+        <td>{{ 'active' if account.is_active else 'disabled' }}</td>
+        <td>
+          {% if account.id != user.id %}
+          <form method="post" action="/portal/admin/users/{{ account.id }}/role" class="inline">
+            <select name="role">
+              {% for role in roles %}
+              <option value="{{ role.value }}" {{ 'selected' if role == account.role }}>
+                {{ role.value }}
+              </option>
+              {% endfor %}
+            </select>
+            <button type="submit">Apply</button>
+          </form>
+          {% else %}<span class="subtle">self</span>{% endif %}
+        </td>
+        <td>
+          {% if account.id != user.id %}
+          <form method="post" action="/portal/admin/users/{{ account.id }}/active" class="inline">
+            <input type="hidden" name="is_active" value="{{ 'false' if account.is_active else 'true' }}">
+            <button type="submit">{{ 'Disable' if account.is_active else 'Enable' }}</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

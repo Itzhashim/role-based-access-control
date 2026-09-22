@@ -11,12 +11,13 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi.exception_handlers import http_exception_handler
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.audit import audit_denied_request
+from app.audit import audit_refusal
 
 logger = logging.getLogger("app.errors")
 
@@ -45,7 +46,28 @@ def _is_safe(status_code: int, detail: object) -> bool:
     return detail in ALLOWED_DETAILS.get(status_code, frozenset())
 
 
-async def handle_http_exception(request: Request, exc: StarletteHTTPException) -> JSONResponse:
+def wants_html(request: Request) -> bool:
+    """True for a browser navigating the portal, false for API clients."""
+    if request.url.path.startswith("/api/"):
+        return False
+    return "text/html" in request.headers.get("accept", "")
+
+
+def html_response_for(request: Request, status_code: int) -> Response | None:
+    """Turn a refusal into a page instead of a JSON body, where appropriate."""
+    from app.routers.portal import render  # imported late to avoid a cycle
+
+    if status_code == 401:
+        # An expired or missing session sends the visitor back to sign in.
+        return RedirectResponse("/login?expired=1", status_code=303)
+    if status_code == 403:
+        response = render(request, "access_denied.html")
+        response.status_code = 403
+        return response
+    return None
+
+
+async def handle_http_exception(request: Request, exc: StarletteHTTPException) -> Response:
     safe_detail = SAFE_DETAILS.get(exc.status_code)
     if safe_detail is not None and exc.detail != safe_detail and not _is_safe(
         exc.status_code, exc.detail
@@ -58,8 +80,15 @@ async def handle_http_exception(request: Request, exc: StarletteHTTPException) -
             detail=safe_detail,
             headers=getattr(exc, "headers", None),
         )
-    # Denials are audited centrally on the way out.
-    return await audit_denied_request(request, exc)
+
+    # Denials are audited centrally on the way out, whichever front door was used.
+    audit_refusal(request, exc.status_code)
+
+    if wants_html(request):
+        page = html_response_for(request, exc.status_code)
+        if page is not None:
+            return page
+    return await http_exception_handler(request, exc)
 
 
 async def handle_validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:

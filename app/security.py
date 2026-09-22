@@ -55,6 +55,44 @@ def verify_password(password: str, password_hash: str) -> bool:
 DUMMY_PASSWORD_HASH = hash_password("not-a-real-password")
 
 
+# --- Brute-force resistance ------------------------------------------------
+
+
+def is_locked_out(user: User) -> bool:
+    if user.locked_until is None:
+        return False
+    locked_until = user.locked_until
+    if locked_until.tzinfo is None:  # SQLite returns naive datetimes
+        locked_until = locked_until.replace(tzinfo=timezone.utc)
+    return locked_until > datetime.now(timezone.utc)
+
+
+def register_failed_login(db: Session, user: User) -> bool:
+    """Count a failed attempt and lock the account once the threshold is hit.
+
+    Returns ``True`` if this attempt triggered a lockout. The caller still
+    returns the same generic error either way, so the lock itself is not
+    observable from the response.
+    """
+    user.failed_login_count += 1
+    triggered = False
+    if user.failed_login_count >= settings.max_failed_logins:
+        user.locked_until = datetime.now(timezone.utc) + timedelta(
+            minutes=settings.lockout_window_minutes
+        )
+        user.failed_login_count = 0
+        triggered = True
+    db.commit()
+    return triggered
+
+
+def reset_failed_logins(db: Session, user: User) -> None:
+    if user.failed_login_count or user.locked_until:
+        user.failed_login_count = 0
+        user.locked_until = None
+        db.commit()
+
+
 # --- JWT sessions ----------------------------------------------------------
 
 

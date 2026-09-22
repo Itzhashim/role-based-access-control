@@ -15,6 +15,9 @@ from app.security import (
     DUMMY_PASSWORD_HASH,
     create_access_token,
     get_current_user,
+    is_locked_out,
+    register_failed_login,
+    reset_failed_logins,
     revoke_token,
     verify_password,
 )
@@ -64,10 +67,22 @@ def login(
         )
         raise HTTPException(status_code=401, detail=INVALID_CREDENTIALS)
 
-    if not user.is_active or not verify_password(payload.password, user.password_hash):
+    if is_locked_out(user):
         record_audit(
             db,
             action=AuditAction.LOGIN_FAILURE,
+            outcome=DENIED,
+            actor=user,
+            detail="account temporarily locked",
+            request=request,
+        )
+        raise HTTPException(status_code=401, detail=INVALID_CREDENTIALS)
+
+    if not user.is_active or not verify_password(payload.password, user.password_hash):
+        locked = user.is_active and register_failed_login(db, user)
+        record_audit(
+            db,
+            action=AuditAction.ACCOUNT_LOCKED if locked else AuditAction.LOGIN_FAILURE,
             outcome=DENIED,
             actor=user,
             detail="inactive account" if not user.is_active else "bad password",
@@ -75,6 +90,7 @@ def login(
         )
         raise HTTPException(status_code=401, detail=INVALID_CREDENTIALS)
 
+    reset_failed_logins(db, user)
     token, expires_at = create_access_token(user)
     set_session_cookie(response, token)
     record_audit(db, action=AuditAction.LOGIN_SUCCESS, actor=user, request=request)

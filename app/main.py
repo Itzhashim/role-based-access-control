@@ -4,10 +4,9 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
-from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app import __version__
-from app.audit import audit_denied_request
+from app.errors import install_exception_handlers
 from app.config import settings
 from app.authz import verify_deny_by_default
 from app.database import init_db
@@ -28,8 +27,8 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    # Every refused request is audited in one place.
-    app.add_exception_handler(StarletteHTTPException, audit_denied_request)
+    # Safe error bodies, plus central auditing of every refused request.
+    install_exception_handlers(app)
 
     @app.get("/health", tags=["meta"])
     def health() -> dict[str, str]:

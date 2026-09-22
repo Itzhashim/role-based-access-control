@@ -42,6 +42,30 @@ source .venv/bin/activate     # macOS / Linux
 pip install -r requirements.txt
 ```
 
+### Windows: "running scripts is disabled on this system"
+
+PowerShell's execution policy blocks `.venv\Scripts\Activate.ps1` by default. Either allow
+local scripts for your own user (no admin rights required):
+
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
+```
+
+use the batch activator instead:
+
+```powershell
+.\.venv\Scripts\activate.bat
+```
+
+or skip activation altogether and call the interpreter inside the virtual environment directly:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe seed_data.py
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload
+.\.venv\Scripts\python.exe -m pytest
+```
+
 ### Configuration
 
 The defaults work out of the box. To override them, create a `.env` file:

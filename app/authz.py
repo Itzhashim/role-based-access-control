@@ -19,7 +19,7 @@ from fastapi.routing import APIRoute
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import Enrollment, User
+from app.models import Course, Enrollment, User
 from app.permissions import Permission, has_permission
 from app.security import get_current_user
 
@@ -96,6 +96,34 @@ def get_own_enrollment(db: Session, student: User, course_id: int) -> Enrollment
     enrollment = db.scalar(
         select(Enrollment).where(
             Enrollment.student_id == student.id, Enrollment.course_id == course_id
+        )
+    )
+    if enrollment is None:
+        raise access_denied()
+    return enrollment
+
+
+def get_assigned_course(db: Session, faculty: User, course_id: int) -> Course:
+    """Return a course only if ``faculty`` is the assigned instructor.
+
+    Assignment lives on the course row, which only an administrator can change;
+    a faculty member cannot reach a colleague's course by editing an id.
+    """
+    course = db.get(Course, course_id)
+    if course is None or course.faculty_id != faculty.id:
+        raise access_denied()
+    return course
+
+
+def get_enrollment_in_course(db: Session, course_id: int, student_id: int) -> Enrollment:
+    """Return the enrollment linking ``student_id`` to ``course_id``, or deny.
+
+    Used before writing a grade so an instructor cannot grade a student who is
+    not on their roster.
+    """
+    enrollment = db.scalar(
+        select(Enrollment).where(
+            Enrollment.course_id == course_id, Enrollment.student_id == student_id
         )
     )
     if enrollment is None:

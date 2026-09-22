@@ -8,10 +8,11 @@ a compromised administrator account from silently altering grades.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.audit import AuditAction, record_audit, recent_entries
 from app.authz import require_permission
 from app.database import get_db
 from app.models import Announcement, Course, Enrollment, Role, User
@@ -19,6 +20,7 @@ from app.permissions import Permission
 from app.schemas import (
     AnnouncementCreate,
     AnnouncementOut,
+    AuditLogOut,
     CourseAssign,
     CourseCreate,
     CourseOut,
@@ -60,6 +62,7 @@ def list_users(
 @router.post("/users", response_model=UserOut, status_code=status.HTTP_201_CREATED)
 def create_user(
     payload: UserCreate,
+    request: Request,
     current_user: User = Depends(require_permission(Permission.USERS_MANAGE)),
     db: Session = Depends(get_db),
 ) -> User:
@@ -80,6 +83,15 @@ def create_user(
     db.add(user)
     db.commit()
     db.refresh(user)
+    record_audit(
+        db,
+        action=AuditAction.USER_CREATE,
+        actor=current_user,
+        target_type="user",
+        target_id=user.id,
+        detail=f"username={user.username} role={user.role.value}",
+        request=request,
+    )
     return user
 
 
@@ -87,6 +99,7 @@ def create_user(
 def update_user(
     user_id: int,
     payload: UserUpdate,
+    request: Request,
     current_user: User = Depends(require_permission(Permission.USERS_MANAGE)),
     db: Session = Depends(get_db),
 ) -> User:
@@ -96,10 +109,20 @@ def update_user(
         # Refuse the change that would lock the last operator out of the portal.
         raise HTTPException(status_code=400, detail="Cannot deactivate your own account")
 
-    for field, value in payload.model_dump(exclude_unset=True).items():
+    changes = payload.model_dump(exclude_unset=True)
+    for field, value in changes.items():
         setattr(user, field, value)
     db.commit()
     db.refresh(user)
+    record_audit(
+        db,
+        action=AuditAction.USER_UPDATE,
+        actor=current_user,
+        target_type="user",
+        target_id=user.id,
+        detail=", ".join(f"{k}={v}" for k, v in changes.items()) or "no change",
+        request=request,
+    )
     return user
 
 
@@ -107,6 +130,7 @@ def update_user(
 def assign_role(
     user_id: int,
     payload: RoleUpdate,
+    request: Request,
     current_user: User = Depends(require_permission(Permission.ROLES_ASSIGN)),
     db: Session = Depends(get_db),
 ) -> User:
@@ -120,9 +144,19 @@ def assign_role(
     if user.id == current_user.id:
         raise HTTPException(status_code=400, detail="Cannot change your own role")
 
+    previous_role = user.role
     user.role = payload.role
     db.commit()
     db.refresh(user)
+    record_audit(
+        db,
+        action=AuditAction.ROLE_ASSIGN,
+        actor=current_user,
+        target_type="user",
+        target_id=user.id,
+        detail=f"{previous_role.value} -> {user.role.value}",
+        request=request,
+    )
     return user
 
 
@@ -140,6 +174,7 @@ def list_courses(
 @router.post("/courses", response_model=CourseOut, status_code=status.HTTP_201_CREATED)
 def create_course(
     payload: CourseCreate,
+    request: Request,
     current_user: User = Depends(require_permission(Permission.COURSES_MANAGE)),
     db: Session = Depends(get_db),
 ) -> CourseOut:
@@ -152,6 +187,15 @@ def create_course(
     db.add(course)
     db.commit()
     db.refresh(course)
+    record_audit(
+        db,
+        action=AuditAction.COURSE_CREATE,
+        actor=current_user,
+        target_type="course",
+        target_id=course.id,
+        detail=f"code={course.code} faculty={course.faculty_id}",
+        request=request,
+    )
     return course_out(course)
 
 
@@ -159,6 +203,7 @@ def create_course(
 def assign_course_faculty(
     course_id: int,
     payload: CourseAssign,
+    request: Request,
     current_user: User = Depends(require_permission(Permission.COURSES_MANAGE)),
     db: Session = Depends(get_db),
 ) -> CourseOut:
@@ -167,15 +212,26 @@ def assign_course_faculty(
         raise HTTPException(status_code=404, detail="Not found")
     _require_faculty(db, payload.faculty_id)
 
+    previous_faculty_id = course.faculty_id
     course.faculty_id = payload.faculty_id
     db.commit()
     db.refresh(course)
+    record_audit(
+        db,
+        action=AuditAction.COURSE_ASSIGN,
+        actor=current_user,
+        target_type="course",
+        target_id=course.id,
+        detail=f"faculty {previous_faculty_id} -> {course.faculty_id}",
+        request=request,
+    )
     return course_out(course)
 
 
 @router.post("/enrollments", response_model=EnrollmentOut, status_code=status.HTTP_201_CREATED)
 def create_enrollment(
     payload: EnrollmentCreate,
+    request: Request,
     current_user: User = Depends(require_permission(Permission.ENROLLMENTS_MANAGE)),
     db: Session = Depends(get_db),
 ) -> Enrollment:
@@ -196,6 +252,15 @@ def create_enrollment(
     db.add(enrollment)
     db.commit()
     db.refresh(enrollment)
+    record_audit(
+        db,
+        action=AuditAction.ENROLLMENT_CREATE,
+        actor=current_user,
+        target_type="enrollment",
+        target_id=enrollment.id,
+        detail=f"student={enrollment.student_id} course={enrollment.course_id}",
+        request=request,
+    )
     return enrollment
 
 
@@ -204,6 +269,7 @@ def create_enrollment(
 )
 def publish_campus_announcement(
     payload: AnnouncementCreate,
+    request: Request,
     current_user: User = Depends(require_permission(Permission.ANNOUNCEMENTS_WRITE_GLOBAL)),
     db: Session = Depends(get_db),
 ) -> AnnouncementOut:
@@ -216,7 +282,39 @@ def publish_campus_announcement(
     db.add(announcement)
     db.commit()
     db.refresh(announcement)
+    record_audit(
+        db,
+        action=AuditAction.ANNOUNCEMENT_PUBLISH,
+        actor=current_user,
+        target_type="announcement",
+        target_id=announcement.id,
+        detail="campus-wide",
+        request=request,
+    )
     return announcement_out(announcement)
+
+
+# --- Oversight -------------------------------------------------------------
+
+
+@router.get("/audit", response_model=list[AuditLogOut])
+def read_audit_log(
+    action: str | None = None,
+    outcome: str | None = None,
+    actor_id: int | None = None,
+    limit: int = 100,
+    current_user: User = Depends(require_permission(Permission.AUDIT_READ)),
+    db: Session = Depends(get_db),
+) -> list[AuditLogOut]:
+    """The audit trail, newest first. Readable only by administrators."""
+    entries = recent_entries(
+        db,
+        limit=max(1, min(limit, 500)),
+        action=action,
+        outcome=outcome,
+        actor_id=actor_id,
+    )
+    return [AuditLogOut.model_validate(entry) for entry in entries]
 
 
 def _require_faculty(db: Session, faculty_id: int) -> User:

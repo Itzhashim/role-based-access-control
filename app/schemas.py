@@ -159,6 +159,22 @@ class AnnouncementOut(ORMModel):
     created_at: datetime
 
 
+class AuditLogOut(ORMModel):
+    id: int
+    timestamp: datetime
+    actor_id: int | None = None
+    actor_username: str | None = None
+    actor_role: str | None = None
+    action: str
+    outcome: str
+    target_type: str | None = None
+    target_id: str | None = None
+    detail: str | None = None
+    method: str | None = None
+    path: str | None = None
+    ip_address: str | None = None
+
+
 class AnnouncementCreate(BaseModel):
     title: str = Field(min_length=1, max_length=160)
     body: str = Field(min_length=1, max_length=4000)

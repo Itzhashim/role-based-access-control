@@ -138,6 +138,34 @@ class Grade(Base):
         return "F"
 
 
+class AuditLog(Base):
+    """Append-only record of sensitive operations and refused access attempts.
+
+    The actor's username and role are copied in rather than only referenced, so
+    the trail stays readable even if the account is later renamed or removed.
+    """
+
+    __tablename__ = "audit_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    timestamp: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, index=True
+    )
+    actor_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    actor_username: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    actor_role: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    action: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    outcome: Mapped[str] = mapped_column(String(10), nullable=False, index=True)
+    target_type: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    target_id: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    detail: Mapped[str | None] = mapped_column(Text, nullable=True)
+    method: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    path: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    ip_address: Mapped[str | None] = mapped_column(String(45), nullable=True)
+
+
 class RevokedToken(Base):
     """Blocklist of session tokens invalidated by an explicit logout.
 

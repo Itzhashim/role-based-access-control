@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.audit import DENIED, AuditAction, record_audit
 from app.config import settings
 from app.database import get_db
 from app.models import User
@@ -36,7 +37,12 @@ def set_session_cookie(response: Response, token: str) -> None:
 
 
 @router.post("/login", response_model=TokenResponse)
-def login(payload: LoginRequest, response: Response, db: Session = Depends(get_db)) -> TokenResponse:
+def login(
+    payload: LoginRequest,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+) -> TokenResponse:
     """Verify credentials and issue a session token.
 
     The same message and status are returned for an unknown username, a wrong
@@ -48,13 +54,30 @@ def login(payload: LoginRequest, response: Response, db: Session = Depends(get_d
     if user is None:
         # Spend comparable time on unknown accounts to blunt timing analysis.
         verify_password(payload.password, DUMMY_PASSWORD_HASH)
+        record_audit(
+            db,
+            action=AuditAction.LOGIN_FAILURE,
+            outcome=DENIED,
+            actor_username=payload.username,
+            detail="unknown account",
+            request=request,
+        )
         raise HTTPException(status_code=401, detail=INVALID_CREDENTIALS)
 
     if not user.is_active or not verify_password(payload.password, user.password_hash):
+        record_audit(
+            db,
+            action=AuditAction.LOGIN_FAILURE,
+            outcome=DENIED,
+            actor=user,
+            detail="inactive account" if not user.is_active else "bad password",
+            request=request,
+        )
         raise HTTPException(status_code=401, detail=INVALID_CREDENTIALS)
 
     token, expires_at = create_access_token(user)
     set_session_cookie(response, token)
+    record_audit(db, action=AuditAction.LOGIN_SUCCESS, actor=user, request=request)
     return TokenResponse(access_token=token, expires_at=expires_at, role=user.role)
 
 
@@ -68,6 +91,7 @@ def logout(
     """Revoke the presented token so it cannot be replayed after logout."""
     revoke_token(db, request.state.token_claims)
     response.delete_cookie(settings.session_cookie_name, path="/")
+    record_audit(db, action=AuditAction.LOGOUT, actor=current_user, request=request)
     return MessageResponse(detail="Logged out")
 
 

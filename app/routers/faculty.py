@@ -7,10 +7,11 @@ must name the caller as its instructor, and the student must be on its roster.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.audit import AuditAction, record_audit
 from app.authz import (
     ensure_self,
     get_assigned_course,
@@ -81,14 +82,16 @@ def list_course_grades(
 def upsert_grade(
     course_id: int,
     payload: GradeUpsert,
+    request: Request,
     current_user: User = Depends(require_permission(Permission.GRADES_WRITE_COURSE)),
     db: Session = Depends(get_db),
 ) -> GradeOut:
     """Record or update a grade for a student on the caller's own course."""
-    get_assigned_course(db, current_user, course_id)
+    course = get_assigned_course(db, current_user, course_id)
     enrollment = get_enrollment_in_course(db, course_id, payload.student_id)
 
     grade = enrollment.grade
+    previous = grade.score if grade else None
     if grade is None:
         grade = Grade(enrollment_id=enrollment.id, score=payload.score, letter="F")
         db.add(grade)
@@ -99,6 +102,19 @@ def upsert_grade(
     grade.updated_by_id = current_user.id
     db.commit()
     db.refresh(grade)
+
+    record_audit(
+        db,
+        action=AuditAction.GRADE_WRITE,
+        actor=current_user,
+        target_type="grade",
+        target_id=grade.id,
+        detail=(
+            f"{course.code} student={payload.student_id} "
+            f"{'created' if previous is None else f'{previous} ->'} {grade.score}"
+        ),
+        request=request,
+    )
     return grade_out(grade, enrollment)
 
 
@@ -110,6 +126,7 @@ def upsert_grade(
 def publish_course_announcement(
     course_id: int,
     payload: AnnouncementCreate,
+    request: Request,
     current_user: User = Depends(require_permission(Permission.ANNOUNCEMENTS_WRITE_COURSE)),
     db: Session = Depends(get_db),
 ) -> AnnouncementOut:
@@ -128,4 +145,13 @@ def publish_course_announcement(
     db.add(announcement)
     db.commit()
     db.refresh(announcement)
+    record_audit(
+        db,
+        action=AuditAction.ANNOUNCEMENT_PUBLISH,
+        actor=current_user,
+        target_type="announcement",
+        target_id=announcement.id,
+        detail=f"course={course_id}",
+        request=request,
+    )
     return announcement_out(announcement)

@@ -1,9 +1,19 @@
 """FastAPI application entry point."""
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 
 from app import __version__
 from app.config import settings
+from app.database import init_db
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    init_db()
+    yield
 
 
 def create_app() -> FastAPI:
@@ -11,6 +21,7 @@ def create_app() -> FastAPI:
         title=settings.app_name,
         version=__version__,
         description="A college portal demonstrating role-based access control.",
+        lifespan=lifespan,
     )
 
     @app.get("/health", tags=["meta"])
